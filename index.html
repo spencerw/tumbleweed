@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tumbleweed</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+</head>
+<body>
+
+  <header>
+    <div class="logo">QC<span>CHECKER</span></div>
+    <div class="divider"></div>
+    <div class="title">Tumbleweed</div>
+  </header>
+
+  <div id="dropzone">
+    <input type="file" accept=".miz" id="file-input">
+    <div class="icon">📦</div>
+    <h2>Drop a .miz file here</h2>
+    <p>or click to browse</p>
+  </div>
+
+  <div id="app">
+    <div id="mission-bar"></div>
+
+    <div class="section">
+      <div class="section-header">
+        <h3>Triggers</h3>
+        <span class="count" id="trigger-count"></span>
+      </div>
+      <div id="trigger-list"></div>
+    </div>
+
+    <div class="section" id="graph-section" style="display:none;">
+      <div class="section-header">
+        <h3>Dependency Graph</h3>
+        <span class="count">chains only</span>
+      </div>
+      <div id="cy"></div>
+    </div>
+  </div>
+
+  <script src="lua_parser.js"></script>
+  <script src="mission_parser.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
