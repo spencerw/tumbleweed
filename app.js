@@ -28,6 +28,26 @@ function renderMissionBar(filename, theatre, date) {
   `;
 }
 
+// ── Warnings ──────────────────────────────────────────────────────────────────
+
+function renderWarnings(warnings) {
+  const errors    = warnings.filter(w => w.severity === 'ERROR').length;
+  const warnings_ = warnings.filter(w => w.severity === 'WARNING').length;
+
+  const header = warnings.length === 0
+    ? `<div class="warnings-header warnings-pass"><span class="warnings-icon">✓</span> QC check passed — no problems found.</div>`
+    : `<div class="warnings-summary">Problems found: ${errors} error${errors !== 1 ? 's' : ''}, ${warnings_} warning${warnings_ !== 1 ? 's' : ''}.</div>`;
+
+  const items = warnings.map(w => `
+    <div class="warning ${w.severity === 'ERROR' ? 'warning-error' : 'warning-warn'}">
+      <span class="warning-icon">${w.severity === 'ERROR' ? '✗' : '⚠'}</span>
+      <span class="warning-text">${esc(w.message)}</span>
+    </div>
+  `).join('');
+
+  return `<div class="warnings-section">${header}${items}</div>`;
+}
+
 // ── Trigger table ─────────────────────────────────────────────────────────────
 
 function renderTriggerRow(t, depth = 0) {
@@ -389,11 +409,13 @@ async function loadMiz(file) {
     const missionText        = await missionFile.async('string');
     const mission            = parseLua(missionText);
     const { triggers, edges } = getTriggers(mission);
-    const tree = buildTriggerTree(triggers, edges);
+    const tree     = buildTriggerTree(triggers, edges);
+    const warnings = runChecks(mission, triggers, edges);
 
     document.getElementById('mission-bar').innerHTML     = renderMissionBar(file.name, theatre, mission?.date);
     document.getElementById('trigger-count').textContent = `${triggers.length} found`;
     document.getElementById('trigger-list').innerHTML    = renderTriggers(tree);
+    document.getElementById('warnings-list').innerHTML  = renderWarnings(warnings);
 
     renderGraph(triggers, edges);
 

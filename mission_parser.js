@@ -434,3 +434,113 @@ function formatAction(a, groupNames, flagLabels = new Map()) {
   if (p === 'a_set_ai_task')                  return `set AI task [${a.set_ai_task?.[1]}, ${a.set_ai_task?.[2]}]`;
   return p;
 }
+
+// ── QC checks ─────────────────────────────────────────────────────────────────
+
+function runChecks(mission, triggers, edges) {
+  const warnings = [];
+
+  // ── Collect flags from BOTH trig and trigrules formats ────────────────────
+  const flagsSet     = new Set();
+  const flagsChecked = new Map(); // flag → [trigger comments that check it]
+
+  // Scan trigrules (structured format)
+  const tr = mission?.trigrules;
+  if (tr) {
+    for (const k of Object.keys(tr)) {
+      const t = tr[k];
+      if (typeof t !== 'object') continue;
+      const comment = t.comment || `#${k}`;
+
+      for (const a of Object.values(t.actions || {})) {
+        if (typeof a !== 'object') continue;
+        if ((a.predicate === 'a_set_flag' || a.predicate === 'a_set_flag_value') && a.flag != null)
+          flagsSet.add(String(a.flag));
+        if (a.predicate === 'a_add_radio_item_for_group' && a.flag != null)
+          flagsSet.add(String(a.flag));
+      }
+
+      for (const r of Object.values(t.rules || {})) {
+        if (typeof r !== 'object') continue;
+        if (['c_flag_equals','c_flag_is_true','c_flag_is_false','c_time_since_flag'].includes(r.predicate) && r.flag != null) {
+          const f = String(r.flag);
+          if (!flagsChecked.has(f)) flagsChecked.set(f, []);
+          flagsChecked.get(f).push(comment);
+        }
+      }
+    }
+  }
+
+  // Scan old trig format (raw strings)
+  const trig = mission?.trig;
+  if (trig) {
+    const actions    = trig.actions    || {};
+    const conditions = trig.conditions || {};
+
+    // Extract flags set from raw action strings
+    for (const action of Object.values(actions)) {
+      if (typeof action !== 'string') continue;
+      for (const m of action.matchAll(/a_set_flag(?:_value)?\(["']?(\w+)["']?[,)]/g))
+        flagsSet.add(m[1]);
+      for (const m of action.matchAll(/a_add_radio_item_for_group\([^,]+,[^,]+,\s*["'](\w+)["']/g))
+        flagsSet.add(m[1]);
+    }
+
+    // Extract flags checked from raw condition strings
+    // We don't label these since they have no user-visible names —
+    // the trigrules entries will already cover what the mission maker sees
+    for (const [idx, condition] of Object.entries(conditions)) {
+      if (typeof condition !== 'string') continue;
+      for (const m of condition.matchAll(/c_flag_(?:equals|is_true|is_false)\(["']?(\w+)["']?/g)) {
+        const f = m[1];
+        if (!flagsChecked.has(f)) flagsChecked.set(f, []);
+        // Only add if not already covered by a named trigrules trigger
+        if (!flagsChecked.get(f).length) flagsChecked.get(f).push(`unnamed trigger #${idx}`);
+      }
+    }
+  }
+
+  // ── Check 1: Flags checked but never set ──────────────────────────────────
+  for (const [flag, checkers] of flagsChecked) {
+    if (!flagsSet.has(flag)) {
+      const unique = [...new Set(checkers)];
+      warnings.push({
+        severity: 'ERROR',
+        message:  `Flag "${flag}" is checked by ${unique.map(c => `"${c}"`).join(', ')} but never set by any trigger — these conditions can never be true.`,
+      });
+    }
+  }
+
+  // ── Check 2: Flags set but never checked ──────────────────────────────────
+  for (const flag of flagsSet) {
+    if (!flagsChecked.has(flag)) {
+      warnings.push({
+        severity: 'WARNING',
+        message:  `Flag "${flag}" is set by a trigger but never checked by any condition — may be unused or a leftover.`,
+      });
+    }
+  }
+
+  // ── Check 3: Duplicate trigger names ─────────────────────────────────────
+  const nameCounts = new Map();
+  if (tr) {
+    for (const k of Object.keys(tr)) {
+      const t = tr[k];
+      if (typeof t !== 'object' || !t.comment) continue;
+      nameCounts.set(t.comment, (nameCounts.get(t.comment) || 0) + 1);
+    }
+  }
+  for (const [name, count] of nameCounts) {
+    if (count > 1) {
+      warnings.push({
+        severity: 'WARNING',
+        message:  `Trigger name "${name}" is used ${count} times — duplicate names make it hard to identify which trigger fired.`,
+      });
+    }
+  }
+
+  // Sort errors before warnings
+  warnings.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'ERROR' ? -1 : 1));
+
+  return warnings;
+}
