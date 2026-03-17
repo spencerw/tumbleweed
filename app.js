@@ -291,13 +291,14 @@ function renderGraph(triggers, edges) {
     .attr('orient', 'auto')
     .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#2a3444');
 
-  // Zoomable/pannable container
+  // Pannable container — zoom disabled, drag to pan only
   const g = svg.append('g');
 
-  svg.call(d3.zoom()
-    .scaleExtent([0.2, 3])
-    .on('zoom', e => g.attr('transform', e.transform))
-  );
+  svg.call(
+    d3.zoom()
+      .scaleExtent([1, 1])  // lock scale at 1 — no zooming
+      .on('zoom', e => g.attr('transform', e.transform))
+  ).on('wheel.zoom', null);  // disable scroll-to-zoom
 
   // Edges
   g.append('g').selectAll('line')
