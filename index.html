@@ -26,6 +26,13 @@
   <div id="app">
     <div id="mission-bar"></div>
 
+    <div class="section" id="graph-section" style="display:none;">
+      <div class="section-header">
+        <h3>Dependency Graph</h3>
+      </div>
+      <div id="cy"></div>
+    </div>
+
     <div class="section">
       <div class="section-header">
         <h3>Triggers</h3>
@@ -34,13 +41,6 @@
       <div id="trigger-list"></div>
     </div>
 
-    <div class="section" id="graph-section" style="display:none;">
-      <div class="section-header">
-        <h3>Dependency Graph</h3>
-        <span class="count">chains only</span>
-      </div>
-      <div id="cy"></div>
-    </div>
   </div>
 
   <script src="lua_parser.js"></script>

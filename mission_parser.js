@@ -21,6 +21,26 @@ function buildGroupNames(mission) {
   return map;
 }
 
+function buildUnitNames(mission) {
+  // Returns Map<unitId, unitName>
+  const map = new Map();
+  const coalitions = mission?.coalition || {};
+  for (const side of Object.values(coalitions)) {
+    for (const country of Object.values(side?.country || {})) {
+      for (const category of ['plane', 'helicopter', 'vehicle', 'ship', 'static']) {
+        for (const group of Object.values(country?.[category]?.group || {})) {
+          for (const unit of Object.values(group?.units || {})) {
+            if (unit?.unitId != null && unit?.name) {
+              map.set(unit.unitId, unit.name);
+            }
+          }
+        }
+      }
+    }
+  }
+  return map;
+}
+
 function buildZoneNames(mission) {
   // Returns Map<zoneId, zoneName>
   const map = new Map();
@@ -39,6 +59,11 @@ function gname(id, groupNames) {
   return name ? `"${name}"` : `group ${id}`;
 }
 
+function uname(id, unitNames) {
+  const name = unitNames?.get(id);
+  return name ? `"${name}"` : `unit ${id}`;
+}
+
 function zname(id, zoneNames) {
   const name = zoneNames.get(id);
   return name ? `"${name}"` : `zone ${id}`;
@@ -53,6 +78,7 @@ function flagsSetBy(actions) {
   for (const a of Object.values(actions)) {
     if (typeof a !== 'object') continue;
     if (a.predicate === 'a_set_flag' && a.flag != null)           flags.add(String(a.flag));
+    if (a.predicate === 'a_set_flag_value' && a.flag != null)     flags.add(String(a.flag));
     if (a.predicate === 'a_add_radio_item_for_group' && a.flag)   flags.add(String(a.flag));
   }
   return flags;
@@ -183,6 +209,7 @@ function computeChainDepths(edges) {
 
 function getTriggers(mission) {
   const groupNames = buildGroupNames(mission);
+  const unitNames  = buildUnitNames(mission);
   const zoneNames  = buildZoneNames(mission);
   const triggers   = [];
 
@@ -208,6 +235,8 @@ function getTriggers(mission) {
       for (const a of Object.values(t.actions || {})) {
         if (typeof a !== 'object') continue;
         if (a.predicate === 'a_set_flag' && a.flag != null)
+          flagLabels.set(String(a.flag), t.comment);
+        if (a.predicate === 'a_set_flag_value' && a.flag != null)
           flagLabels.set(String(a.flag), t.comment);
         if (a.predicate === 'a_add_radio_item_for_group' && a.flag != null)
           flagLabels.set(String(a.flag), t.comment);
@@ -241,7 +270,7 @@ function getTriggers(mission) {
         idx:        raw.idx,
         comment:    t.comment || '',
         type:       t.predicate || 'unknown',
-        rules:      rulesFromObj(t.rules, groupNames, zoneNames, flagLabels),
+        rules:      rulesFromObj(t.rules, groupNames, unitNames, zoneNames, flagLabels),
         actions:    actionsFromObj(t.actions, groupNames, flagLabels),
         chainDepth,
       });
@@ -320,11 +349,31 @@ function buildTriggerTree(triggers, edges) {
   return { roots, isolated };
 }
 
-function rulesFromObj(rules, groupNames, zoneNames, flagLabels = new Map()) {
+function rulesFromObj(rules, groupNames, unitNames, zoneNames, flagLabels = new Map()) {
   if (!rules) return [];
-  return Object.values(rules)
-    .filter(r => typeof r === 'object' && r.predicate && r.predicate !== 'or' && r.predicate !== 'and')
-    .map(r => formatRule(r, groupNames, zoneNames, flagLabels));
+  const items = Object.values(rules);
+  if (!items.length) return [];
+
+  const result = [];
+  let nextOperator = null;
+
+  for (const r of items) {
+    if (typeof r !== 'object') continue;
+    if (r.predicate === 'or')  { nextOperator = 'OR';  continue; }
+    if (r.predicate === 'and') { nextOperator = 'AND'; continue; }
+
+    const text = formatRule(r, groupNames, unitNames, zoneNames, flagLabels);
+
+    // Append the operator that follows the previous condition
+    if (nextOperator && result.length > 0) {
+      result[result.length - 1] += ` ${nextOperator}`;
+    }
+
+    result.push(text);
+    nextOperator = null;
+  }
+
+  return result;
 }
 
 function actionsFromObj(actions, groupNames, flagLabels = new Map()) {
@@ -339,9 +388,10 @@ function flagLabel(flag, flagLabels) {
   return label ? `"${label}"` : `"${flag}"`;
 }
 
-function formatRule(r, groupNames, zoneNames, flagLabels = new Map()) {
+function formatRule(r, groupNames, unitNames, zoneNames, flagLabels = new Map()) {
   const p  = r.predicate || '';
   const g  = id => gname(id, groupNames);
+  const u  = id => uname(id, unitNames);
   const z  = id => zname(id, zoneNames);
   const fl = f  => flagLabel(f, flagLabels);
 
@@ -349,13 +399,16 @@ function formatRule(r, groupNames, zoneNames, flagLabels = new Map()) {
   if (p === 'c_flag_is_true')              return `flag ${fl(r.flag)} is true`;
   if (p === 'c_time_since_flag')           return `${r.seconds}s since flag ${fl(r.flag)}`;
   if (p === 'c_time_after')                return `time > ${r.seconds}s`;
-  if (p === 'c_unit_in_zone_unit')         return `unit ${r.unit} in ${z(r.zone)} (linked unit ${r.zoneunit})`;
+  if (p === 'c_unit_in_zone_unit')         return `${u(r.unit)} in ${z(r.zone)} (linked unit ${u(r.zoneunit)})`;
+  if (p === 'c_unit_in_zone')              return `${u(r.unit)} in ${z(r.zone)}`;
+  if (p === 'c_unit_altitude_higher')      return `${u(r.unit)} altitude > ${r.altitude}ft`;
   if (p === 'c_part_of_group_in_zone')     return `part of ${g(r.group)} in ${z(r.zone)}`;
   if (p === 'c_all_of_group_out_zone')     return `all of ${g(r.group)} out of ${z(r.zone)}`;
   if (p === 'c_part_of_coalition_in_zone') return `part of ${r.coalitionlist} in ${z(r.zone)}`;
   if (p === 'c_all_of_coalition_out_zone') return `all of ${r.coalitionlist} out of ${z(r.zone)}`;
   if (p === 'c_group_dead')                return `${g(r.group)} dead`;
-  if (p === 'c_unit_damaged')              return `unit ${r.unit} damaged`;
+  if (p === 'c_unit_dead')                 return `${u(r.unit)} dead`;
+  if (p === 'c_unit_damaged')              return `${u(r.unit)} damaged`;
   if (p === 'c_missile_in_zone')           return `missile in ${z(r.zone)}`;
   return p + (r.flag ? ` ${fl(r.flag)}` : r.group ? ` ${g(r.group)}` : '');
 }
@@ -366,6 +419,7 @@ function formatAction(a, groupNames, flagLabels = new Map()) {
   const fl = f  => flagLabel(f, flagLabels);
 
   if (p === 'a_set_flag')                     return `set flag ${fl(a.flag)}`;
+  if (p === 'a_set_flag_value')               return `set flag ${fl(a.flag)} = ${a.value}`;
   if (p === 'a_clear_flag')                   return `clear flag ${fl(a.flag)}`;
   if (p === 'a_activate_group')               return `activate ${g(a.group)}`;
   if (p === 'a_deactivate_group')             return `deactivate ${g(a.group)}`;
@@ -377,5 +431,6 @@ function formatAction(a, groupNames, flagLabels = new Map()) {
   if (p === 'a_explosion_unit')               return `explosion on unit ${a.unit}`;
   if (p === 'a_do_script')                    return `run inline script`;
   if (p === 'a_do_script_file')               return `run script file`;
+  if (p === 'a_set_ai_task')                  return `set AI task [${a.set_ai_task?.[1]}, ${a.set_ai_task?.[2]}]`;
   return p;
 }

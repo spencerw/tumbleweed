@@ -85,16 +85,10 @@ function renderTriggers(tree) {
 // ── Dependency graph (D3) ─────────────────────────────────────────────────────
 
 function renderGraph(triggers, edges) {
-  const inChain = new Set();
-  for (const [from, tos] of edges) {
-    if (tos.size > 0) {
-      inChain.add(from);
-      for (const to of tos) inChain.add(to);
-    }
-  }
+  const allIds = new Set(triggers.map(t => t.idx));
 
   const section = document.getElementById('graph-section');
-  if (inChain.size === 0) { section.style.display = 'none'; return; }
+  if (allIds.size === 0) { section.style.display = 'none'; return; }
   section.style.display = 'block';
 
   const triggerMap = new Map(triggers.map(t => [t.idx, t]));
@@ -104,20 +98,20 @@ function renderGraph(triggers, edges) {
   const chainEdges = [];
   for (const [from, tos] of edges) {
     for (const to of tos) {
-      if (inChain.has(from) && inChain.has(to))
+      if (allIds.has(from) && allIds.has(to))
         chainEdges.push({ source: from, target: to });
     }
   }
 
   // ── Layout ────────────────────────────────────────────────────────────────
-  const inDegree = new Map([...inChain].map(id => [id, 0]));
+  const inDegree = new Map([...allIds].map(id => [id, 0]));
   for (const { target } of chainEdges) inDegree.set(target, (inDegree.get(target) || 0) + 1);
 
   const col = new Map();
-  const queue = [...inChain].filter(id => inDegree.get(id) === 0);
+  const queue = [...allIds].filter(id => inDegree.get(id) === 0);
   queue.forEach(id => col.set(id, 0));
 
-  const adjOut = new Map([...inChain].map(id => [id, []]));
+  const adjOut = new Map([...allIds].map(id => [id, []]));
   for (const { source, target } of chainEdges) adjOut.get(source).push(target);
 
   const visited = new Set(queue);
@@ -131,20 +125,53 @@ function renderGraph(triggers, edges) {
   }
 
   const byCol = new Map();
-  for (const id of inChain) {
+  for (const id of allIds) {
     const c = col.get(id) || 0;
     if (!byCol.has(c)) byCol.set(c, []);
     byCol.get(c).push(id);
   }
 
-  // Node dimensions — variable height based on condition count
-  const NODE_W    = 280;
-  const HEADER_H  = 28;
-  const COND_H    = 16;
+  // Node dimensions
+  const HEADER_H  = 32;
+  const COND_H    = 17;
   const COND_PAD  = 8;
-  const COL_GAP   = 340;
+  const COL_GAP   = 40;  // gap between columns (added to node widths)
   const ROW_GAP   = 16;
   const PAD       = 40;
+  const MIN_W     = 180;
+  const TEXT_PAD  = 20;  // horizontal padding inside node
+
+  // Measure text width using a hidden SVG element
+  const measureSvg = d3.select(document.body).append('svg')
+    .attr('visibility', 'hidden')
+    .style('position', 'absolute');
+
+  function measureText(text, fontFamily, fontSize) {
+    const t = measureSvg.append('text')
+      .attr('font-family', fontFamily)
+      .attr('font-size', fontSize)
+      .text(text);
+    const w = t.node().getBBox().width;
+    t.remove();
+    return w;
+  }
+
+  // Calculate per-node width based on longest text line
+  const nodeW = new Map();
+  for (const id of allIds) {
+    const t = triggerMap.get(id);
+    const comment = commentOf.get(id) || `#${id}`;
+    let maxTextW = measureText(comment, 'Barlow, sans-serif', '13px');
+    for (const rule of (t?.rules || [])) {
+      maxTextW = Math.max(maxTextW, measureText(rule, 'Share Tech Mono, monospace', '10px'));
+    }
+    for (const action of (t?.actions || [])) {
+      maxTextW = Math.max(maxTextW, measureText(action, 'Share Tech Mono, monospace', '10px'));
+    }
+    nodeW.set(id, Math.max(MIN_W, maxTextW + TEXT_PAD * 2));
+  }
+
+  measureSvg.remove();
 
   function nodeHeight(id) {
     const t      = triggerMap.get(id);
@@ -155,15 +182,59 @@ function renderGraph(triggers, edges) {
     return HEADER_H + condsH + actsH;
   }
 
-  // Assign positions column by column
+  // Build parent lookup: child → [parent, ...]
+  const parents = new Map([...allIds].map(id => [id, []]));
+  for (const { source, target } of chainEdges) {
+    parents.get(target).push(source);
+  }
+
+  // Track max node width per column for column x positioning
+  const colMaxW = new Map();
+  for (const [c, ids] of byCol) {
+    colMaxW.set(c, Math.max(...ids.map(id => nodeW.get(id))));
+  }
+
+  // Calculate column x offsets
+  const sortedCols = [...byCol.keys()].sort((a, b) => a - b);
+  const colX = new Map();
+  let xOffset = PAD;
+  for (const c of sortedCols) {
+    colX.set(c, xOffset);
+    xOffset += colMaxW.get(c) + COL_GAP + PAD;
+  }
+
+  // Assign positions column by column, sorting each column by parent y after
+  // the previous column has been positioned
   const pos = new Map();
   let maxW = 0;
   let maxH = 0;
 
-  for (const [c, ids] of byCol) {
+  for (const c of sortedCols) {
+    const ids = byCol.get(c);
+
+    // Sort: nodes with children first, then by average parent y (or idx for col 0)
+    ids.sort((a, b) => {
+      const aHasChildren = (adjOut.get(a) || []).length > 0;
+      const bHasChildren = (adjOut.get(b) || []).length > 0;
+
+      // Nodes with children come before isolated nodes in the same column
+      if (aHasChildren !== bHasChildren) return aHasChildren ? -1 : 1;
+
+      if (c === 0) return a - b;
+
+      // Sort by average y of parents that have already been positioned
+      const parentY = id => {
+        const ps = (parents.get(id) || []).filter(p => pos.has(p));
+        return ps.length
+          ? ps.reduce((sum, p) => sum + pos.get(p).y, 0) / ps.length
+          : Infinity;
+      };
+      return parentY(a) - parentY(b);
+    });
+
     let y = PAD;
-    const x = PAD + c * COL_GAP + NODE_W / 2;
-    maxW = Math.max(maxW, x + NODE_W / 2 + PAD);
+    const x = colX.get(c) + colMaxW.get(c) / 2;
+    maxW = Math.max(maxW, colX.get(c) + colMaxW.get(c) + PAD);
     for (const id of ids) {
       const h = nodeHeight(id);
       pos.set(id, { x, y: y + h / 2 });
@@ -185,10 +256,12 @@ function renderGraph(triggers, edges) {
   const container = document.getElementById('cy');
   container.innerHTML = '';
 
+  const CANVAS_H = 900;
+
   const svg = d3.select(container).append('svg')
     .attr('width', '100%')
-    .attr('height', H)
-    .attr('viewBox', `0 0 ${W} ${H}`);
+    .attr('height', CANVAS_H)
+    .style('cursor', 'grab');
 
   svg.append('defs').append('marker')
     .attr('id', 'arrow')
@@ -198,28 +271,36 @@ function renderGraph(triggers, edges) {
     .attr('orient', 'auto')
     .append('path').attr('d', 'M0,-5L10,0L0,5').attr('fill', '#2a3444');
 
+  // Zoomable/pannable container
+  const g = svg.append('g');
+
+  svg.call(d3.zoom()
+    .scaleExtent([0.2, 3])
+    .on('zoom', e => g.attr('transform', e.transform))
+  );
+
   // Edges
-  svg.append('g').selectAll('line')
+  g.append('g').selectAll('line')
     .data(chainEdges).enter().append('line')
-      .attr('x1', d => pos.get(d.source).x + NODE_W / 2)
+      .attr('x1', d => pos.get(d.source).x + nodeW.get(d.source) / 2)
       .attr('y1', d => pos.get(d.source).y)
-      .attr('x2', d => pos.get(d.target).x - NODE_W / 2 - 8)
+      .attr('x2', d => pos.get(d.target).x - nodeW.get(d.target) / 2 - 8)
       .attr('y2', d => pos.get(d.target).y)
       .attr('stroke', '#2a3444')
       .attr('stroke-width', 1.5)
       .attr('marker-end', 'url(#arrow)');
 
   // Nodes
-  const node = svg.append('g').selectAll('g')
-    .data([...inChain]).enter().append('g')
+  const node = g.append('g').selectAll('g')
+    .data([...allIds]).enter().append('g')
       .attr('transform', id => {
         const { x, y } = pos.get(id);
-        return `translate(${x - NODE_W / 2},${y - nodeHeight(id) / 2})`;
+        return `translate(${x - nodeW.get(id) / 2},${y - nodeHeight(id) / 2})`;
       });
 
   // Background rect
   node.append('rect')
-    .attr('width',  NODE_W)
+    .attr('width',  id => nodeW.get(id))
     .attr('height', id => nodeHeight(id))
     .attr('rx', 4)
     .attr('fill',         id => colors[roleOf.get(id)]?.fill   || colors.leaf.fill)
@@ -228,7 +309,7 @@ function renderGraph(triggers, edges) {
 
   // Header divider
   node.append('line')
-    .attr('x1', 0).attr('x2', NODE_W)
+    .attr('x1', 0).attr('x2', id => nodeW.get(id))
     .attr('y1', HEADER_H).attr('y2', HEADER_H)
     .attr('stroke', id => colors[roleOf.get(id)]?.stroke || colors.leaf.stroke)
     .attr('stroke-opacity', 0.3)
@@ -236,12 +317,12 @@ function renderGraph(triggers, edges) {
 
   // Comment label
   node.append('text')
-    .attr('x', NODE_W / 2)
+    .attr('x', id => nodeW.get(id) / 2)
     .attr('y', HEADER_H / 2)
     .attr('text-anchor', 'middle')
     .attr('dominant-baseline', 'middle')
     .attr('font-family', 'Barlow, sans-serif')
-    .attr('font-size', '11px')
+    .attr('font-size', '13px')
     .attr('font-weight', id => roleOf.get(id) === 'root' ? 'bold' : 'normal')
     .attr('fill', id => colors[roleOf.get(id)]?.title || colors.leaf.title)
     .text(id => commentOf.get(id) || `#${id}`);
@@ -262,7 +343,7 @@ function renderGraph(triggers, edges) {
         .attr('y', HEADER_H + COND_PAD + i * COND_H + COND_H / 2)
         .attr('dominant-baseline', 'middle')
         .attr('font-family', 'Share Tech Mono, monospace')
-        .attr('font-size', '9px')
+        .attr('font-size', '10px')
         .attr('fill', condColor)
         .text(rule);
     });
@@ -272,7 +353,7 @@ function renderGraph(triggers, edges) {
     // Divider between conditions and actions
     const divY = HEADER_H + COND_PAD + nConds * COND_H + COND_PAD;
     d3.select(this).append('line')
-      .attr('x1', 0).attr('x2', NODE_W)
+      .attr('x1', 0).attr('x2', nodeW.get(id))
       .attr('y1', divY).attr('y2', divY)
       .attr('stroke', colors[role]?.stroke || colors.leaf.stroke)
       .attr('stroke-opacity', 0.3)
@@ -285,7 +366,7 @@ function renderGraph(triggers, edges) {
         .attr('y', divY + COND_PAD + i * COND_H + COND_H / 2)
         .attr('dominant-baseline', 'middle')
         .attr('font-family', 'Share Tech Mono, monospace')
-        .attr('font-size', '9px')
+        .attr('font-size', '10px')
         .attr('fill', actColor)
         .attr('opacity', 0.7)
         .text(action);
