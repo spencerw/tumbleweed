@@ -30,22 +30,71 @@ function renderMissionBar(filename, theatre, date) {
 
 // ── Warnings ──────────────────────────────────────────────────────────────────
 
-function renderWarnings(warnings) {
-  const errors    = warnings.filter(w => w.severity === 'ERROR').length;
-  const warnings_ = warnings.filter(w => w.severity === 'WARNING').length;
+// ── Warnings ──────────────────────────────────────────────────────────────────
 
-  const header = warnings.length === 0
-    ? `<div class="warnings-header warnings-pass"><span class="warnings-icon">✓</span> QC check passed — no problems found.</div>`
-    : `<div class="warnings-summary">Problems found: ${errors} error${errors !== 1 ? 's' : ''}, ${warnings_} warning${warnings_ !== 1 ? 's' : ''}.</div>`;
+function renderWarnings(allIssues, categories) {
+  let html = `<div class="warnings-section">`;
 
-  const items = warnings.map(w => `
-    <div class="warning ${w.severity === 'ERROR' ? 'warning-error' : 'warning-warn'}">
-      <span class="warning-icon">${w.severity === 'ERROR' ? '✗' : '⚠'}</span>
-      <span class="warning-text">${esc(w.message)}</span>
-    </div>
-  `).join('');
+  if (!categories || categories.length === 0) {
+    html += `<div style="color:#2ed573; font-weight:600; padding:8px 0;">✓ QC check passed — no problems found.</div>`;
+    html += `</div>`;
+    return html;
+  }
 
-  return `<div class="warnings-section">${header}${items}</div>`;
+  for (let i = 0; i < categories.length; i++) {
+    const cat = categories[i];
+    const issues = cat.issues || [];
+    const errors = issues.filter(w => w.severity === 'ERROR');
+    const warnings = issues.filter(w => w.severity === 'WARNING');
+    const label = cat.label || 'Check';
+
+    const hasErrors = errors.length > 0;
+    const hasWarnings = warnings.length > 0;
+
+    if (!hasErrors && !hasWarnings) {
+      // PASSED - plain text, NO box, NO background
+      html += `
+        <div style="color:#2ed573; font-weight:600; padding:6px 0;">
+          ✓ ${esc(label)} — passed
+        </div>`;
+    } 
+    else if (hasErrors) {
+      const countText = `${errors.length} error${errors.length !== 1 ? 's' : ''}` +
+                        (hasWarnings ? `, ${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : '');
+      html += `
+        <div style="color:#ff4757; font-weight:600; padding:8px 0;">
+          ✗ ${esc(label)}: ${countText}.
+        </div>`;
+    } 
+    else {
+      html += `
+        <div style="color:#ffa502; font-weight:600; padding:8px 0;">
+          ⚠ ${esc(label)}: ${warnings.length} warning${warnings.length !== 1 ? 's' : ''}.
+        </div>`;
+    }
+
+    // Individual messages
+    if (hasErrors) {
+      html += errors.map(w => `
+        <div class="warning warning-error">
+          <span class="warning-icon">✗</span>
+          <span class="warning-text">${esc(w.message)}</span>
+        </div>
+      `).join('');
+    }
+
+    if (hasWarnings) {
+      html += warnings.map(w => `
+        <div class="warning warning-warn">
+          <span class="warning-icon">⚠</span>
+          <span class="warning-text">${esc(w.message)}</span>
+        </div>
+      `).join('');
+    }
+  }
+
+  html += `</div>`;
+  return html;
 }
 
 // ── Trigger table ─────────────────────────────────────────────────────────────
@@ -413,14 +462,20 @@ async function loadMiz(file) {
     const missionText = await missionFile.async('string');
     const mission     = parseLua(missionText);
     
-    // 1. Initialize warnings immediately so they persist through all checks
-    let warnings = [];
+    let warnings = [];      // flat list of real issues (for coastline etc.)
+    let categories = [];    // all QC categories for per-check display
 
-    // 2. Extract triggers and run logic checks
+    // 2. Extract triggers
     const { triggers, edges } = getTriggers(mission);
-    if (triggers && triggers.length > 0) {
-        const logicWarnings = runChecks(mission, triggers, edges);
-        warnings = warnings.concat(logicWarnings);
+
+    //  ALWAYS run the checks — even if there are zero triggers
+    categories = runChecks(mission, triggers || [], edges || new Map());
+
+    // Flatten issues from categories (exclude coastline placeholder)
+    for (const cat of categories) {
+      if (cat.issues && !cat._coastlinePlaceholder) {
+        warnings.push(...cat.issues);
+      }
     }
 
     // 3. Independent Coastline Audit
@@ -437,13 +492,13 @@ async function loadMiz(file) {
 
     // 4. Update Mission Metadata
     document.getElementById('mission-bar').innerHTML = renderMissionBar(file.name, theatre, mission?.date);
-    document.getElementById('trigger-count').textContent = `${triggers.length} found`;
+    document.getElementById('trigger-count').textContent = `${triggers ? triggers.length : 0} found`;
 
-    // 5. Render Warnings (Crucial: This happens even if triggers.length is 0)
-    document.getElementById('warnings-list').innerHTML = renderWarnings(warnings);
+    // 5. Render Warnings — show every check (passed or failed)
+    document.getElementById('warnings-list').innerHTML = renderWarnings(warnings, categories);
 
     // 6. Conditional Trigger Rendering
-    if (triggers.length > 0) {
+    if (triggers && triggers.length > 0) {
         const tree = buildTriggerTree(triggers, edges);
         document.getElementById('trigger-list').innerHTML = renderTriggers(tree);
         renderGraph(triggers, edges);
