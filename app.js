@@ -398,6 +398,9 @@ function renderGraph(triggers, edges) {
 // ── File loading ──────────────────────────────────────────────────────────────
 
 async function loadMiz(file) {
+  // Reset UI state for new load
+  document.getElementById('warnings-list').innerHTML = '';
+  
   try {
     const zip = await JSZip.loadAsync(file);
 
@@ -407,19 +410,49 @@ async function loadMiz(file) {
     const missionFile = zip.file('mission');
     if (!missionFile) throw new Error('No mission file found in archive');
 
-    const missionText        = await missionFile.async('string');
-    const mission            = parseLua(missionText);
+    const missionText = await missionFile.async('string');
+    const mission     = parseLua(missionText);
+    
+    // 1. Initialize warnings immediately so they persist through all checks
+    let warnings = [];
+
+    // 2. Extract triggers and run logic checks
     const { triggers, edges } = getTriggers(mission);
-    const tree     = buildTriggerTree(triggers, edges);
-    const warnings = runChecks(mission, triggers, edges);
+    if (triggers && triggers.length > 0) {
+        const logicWarnings = runChecks(mission, triggers, edges);
+        warnings = warnings.concat(logicWarnings);
+    }
 
-    document.getElementById('mission-bar').innerHTML     = renderMissionBar(file.name, theatre, mission?.date);
+    // 3. Independent Coastline Audit
+    const coastline = await loadCoastline(theatre);
+    if (coastline) {
+      const collisions = checkShipRoutes(mission, theatre, coastline);
+      for (const c of collisions) {
+        warnings.push({
+          severity: 'ERROR',
+          message: `Ship group "${c.groupName}": waypoint ${c.wpA}→${c.wpB} crosses a coastline — potential run aground.`,
+        });
+      }
+    }
+
+    // 4. Update Mission Metadata
+    document.getElementById('mission-bar').innerHTML = renderMissionBar(file.name, theatre, mission?.date);
     document.getElementById('trigger-count').textContent = `${triggers.length} found`;
-    document.getElementById('trigger-list').innerHTML    = renderTriggers(tree);
-    document.getElementById('warnings-list').innerHTML  = renderWarnings(warnings);
 
-    renderGraph(triggers, edges);
+    // 5. Render Warnings (Crucial: This happens even if triggers.length is 0)
+    document.getElementById('warnings-list').innerHTML = renderWarnings(warnings);
 
+    // 6. Conditional Trigger Rendering
+    if (triggers.length > 0) {
+        const tree = buildTriggerTree(triggers, edges);
+        document.getElementById('trigger-list').innerHTML = renderTriggers(tree);
+        renderGraph(triggers, edges);
+    } else {
+        document.getElementById('trigger-list').innerHTML = '<div class="none">No triggers defined in this mission.</div>';
+        document.getElementById('graph-section').style.display = 'none';
+    }
+
+    // Show app
     document.getElementById('dropzone').style.display = 'none';
     document.getElementById('app').classList.add('visible');
 

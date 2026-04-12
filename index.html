@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tumbleweed</title>
+  <title>Tumbleweed | DCS Mission Auditor</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
@@ -24,28 +24,32 @@
   </div>
 
   <div id="app">
+    
     <div id="mission-bar"></div>
+
+    <div id="warnings-list"></div>
 
     <div class="section" id="graph-section" style="display:none;">
       <div class="section-header">
-        <h3>Dependency Graph</h3>
+        <h3>Trigger Logic Flow</h3>
       </div>
       <div id="cy"></div>
-      <div id="warnings-list"></div>
     </div>
 
     <div class="section">
       <div class="section-header">
-        <h3>Triggers</h3>
-        <span class="count" id="trigger-count"></span>
+        <h3>Mission Triggers</h3>
+        <span class="count" id="trigger-count">0 found</span>
       </div>
-      <div id="trigger-list"></div>
+      <div id="trigger-list">
+        </div>
     </div>
 
   </div>
 
   <script src="lua_parser.js"></script>
   <script src="mission_parser.js"></script>
+  <script src="geo.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
