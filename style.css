@@ -10,8 +10,10 @@
   --muted:   #4a5568;
   --error:   #ff4757;
   --ok:      #2ed573;
+  --warning: #ffa502;
 }
 
+/* ── Reset & Base ── */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -20,6 +22,7 @@ body {
   font-family: 'Barlow', sans-serif;
   font-size: 14px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 /* ── Header ── */
@@ -38,25 +41,11 @@ header {
   color: var(--accent);
 }
 
-.logo span {
-  display: block;
-  color: var(--muted);
-  font-size: 9px;
-}
+.logo span { display: block; color: var(--muted); font-size: 9px; }
+.title { font-size: 18px; font-weight: 700; color: #fff; }
+.divider { width: 1px; height: 32px; background: var(--border); }
 
-.title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
-}
-
-.divider {
-  width: 1px;
-  height: 32px;
-  background: var(--border);
-}
-
-/* ── Drop zone ── */
+/* ── Drop Zone ── */
 #dropzone {
   margin: 48px auto;
   max-width: 520px;
@@ -65,173 +54,58 @@ header {
   padding: 64px 32px;
   text-align: center;
   cursor: pointer;
-  transition: border-color .2s, background .2s;
   position: relative;
+  transition: border-color .2s, background .2s;
 }
 
-#dropzone:hover,
-#dropzone.drag-over {
+#dropzone:hover, #dropzone.drag-over {
   border-color: var(--accent);
   background: rgba(0, 229, 255, .03);
 }
-
-#dropzone .icon { font-size: 36px; margin-bottom: 16px; opacity: .4; }
-#dropzone h2   { font-size: 15px; font-weight: 600; color: #fff; margin-bottom: 6px; }
-#dropzone p    { color: var(--muted); font-size: 13px; }
 
 #dropzone input[type=file] {
   position: absolute;
   inset: 0;
   opacity: 0;
   cursor: pointer;
-  width: 100%;
-  height: 100%;
 }
 
-/* ── App ── */
+/* ── App Layout ── */
 #app { display: none; padding: 0 32px 64px; }
 #app.visible { display: block; }
 
-/* ── Mission bar ── */
 #mission-bar {
   display: flex;
   gap: 24px;
   padding: 14px 0;
   border-bottom: 1px solid var(--border);
   margin-bottom: 32px;
-  flex-wrap: wrap;
 }
 
 .chip { font-family: 'Share Tech Mono', monospace; font-size: 11px; }
 .chip .label { color: var(--muted); text-transform: uppercase; margin-right: 6px; }
 .chip .value { color: var(--accent); }
 
-/* ── Sections ── */
-.section { margin-bottom: 40px; }
-
-.section-header {
+/* ── Panel Layout ── */
+#main-panel {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 16px;
+  width: 100%;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 40px;
 }
 
-.section-header h3 {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .2em;
-  text-transform: uppercase;
-  color: var(--muted);
+#warnings-panel, #graph-panel {
+  flex: 1 1 0px;
+  min-width: 0; 
 }
 
-.section-header .count {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  color: var(--accent);
-}
-
-/* ── Trigger table ── */
-table { width: 100%; border-collapse: collapse; }
-
-th {
-  text-align: left;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-td {
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-
-tr:last-child td { border-bottom: none; }
-tr:hover td { background: rgba(255, 255, 255, .02); }
-
-.idx { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--muted); }
-
-.comment       { font-weight: 600; color: #fff; }
-.comment.empty { color: var(--muted); font-style: italic; font-weight: 400; }
-
-/* ── Type badges ── */
-.badge {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 2px;
-  white-space: nowrap;
-}
-
-.badge.once  { background: rgba(0,229,255,.1);  color: var(--accent);  border: 1px solid rgba(0,229,255,.2); }
-.badge.front { background: rgba(255,107,53,.1); color: var(--accent2); border: 1px solid rgba(255,107,53,.2); }
-.badge.start { background: rgba(46,213,115,.1); color: var(--ok);      border: 1px solid rgba(46,213,115,.2); }
-.badge.unk   { background: rgba(74,85,104,.2);  color: var(--muted);   border: 1px solid var(--border); }
-
-/* ── Condition / action pills ── */
-.pill-list { display: flex; flex-direction: column; gap: 3px; }
-.pill { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--text); }
-.pill.cond::before { content: 'IF ';  color: var(--muted); }
-.pill.act::before  { content: '→  '; color: var(--accent2); }
-
-.none { font-family: 'Share Tech Mono', monospace; font-size: 11px; color: var(--muted); font-style: italic; }
-
-/* ── Tree rows ── */
-.row-root td { background: rgba(255, 255, 255, 0.01); }
-.row-child td { background: rgba(0, 0, 0, 0.15); }
-
-.child-indicator {
-  color: var(--border);
-  margin-right: 4px;
-  font-size: 11px;
-}
-
-.group-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: .15em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 12px 12px 6px;
-  border-top: 1px solid var(--border);
-}
-
-/* ── Chain depth ── */
-.depth-cell { text-align: center; white-space: nowrap; }
-
-.depth-root {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent2);
-  background: rgba(255, 107, 53, 0.1);
-  border: 1px solid rgba(255, 107, 53, 0.3);
-  border-radius: 2px;
-  padding: 2px 8px;
-}
-
-.depth-mid {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  color: var(--accent);
-}
-
-.depth-leaf {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-/* ── Warnings ── */
-.warnings-section {
-  margin-top: 16px;
+/* ── QC Checks & Headers ── */
+.warning-category {
+  margin-bottom: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .warnings-header {
@@ -243,75 +117,119 @@ tr:hover td { background: rgba(255, 255, 255, .02); }
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
+  border: 1px solid transparent;
 }
 
-.warnings-pass {
+.warnings-header.warnings-pass {
   background: rgba(46, 213, 115, 0.08);
-  border: 1px solid rgba(46, 213, 115, 0.3);
+  border-color: rgba(46, 213, 115, 0.2);
   color: var(--ok);
 }
 
-.warnings-summary {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-  padding: 8px 2px 6px;
+.warnings-header.cat-error {
+  background: rgba(255, 71, 87, 0.1);
+  border-color: rgba(255, 71, 87, 0.3);
+  color: var(--error);
 }
 
-.warnings-icon {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 12px;
+.warnings-header.cat-warn {
+  background: rgba(255, 165, 2, 0.1);
+  border-color: rgba(255, 165, 2, 0.3);
+  color: var(--warning);
 }
 
-.warning {
+/* ── SUBITEMS (ISSUE LIST) ── */
+.warning-list {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0 8px 24px; /* Indent subitems */
+}
+
+/* Base style for all subitem rows */
+#warnings-list .warning {
+  display: flex;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 4px;
+  padding: 6px 12px;
   font-size: 12px;
+  border-radius: 2px;
+  line-height: 1.4;
+  border: 1px solid transparent;
 }
 
-.warnings-pass {
-  background: rgba(46, 213, 115, 0.08);
-  border: 1px solid rgba(46, 213, 115, 0.3);
-  color: #2ed573;
-  font-weight: 600;
+.warning-icon { 
+  font-family: 'Share Tech Mono', monospace; 
+  flex-shrink: 0; 
+  font-weight: bold; 
 }
 
-.warning-error {
-  background: rgba(255, 71, 87, 0.08);
-  border: 1px solid rgba(255, 71, 87, 0.3);
+/* RED ERROR SUBITEMS */
+/* Target specifically elements that have the 'error' class */
+#warnings-list .warning.error { 
+  background: rgba(255, 71, 87, 0.08) !important; 
+  border-color: rgba(255, 71, 87, 0.2) !important;
+  color: var(--error) !important;
 }
 
-.warning-warn {
-  background: rgba(255, 165, 2, 0.08);
-  border: 1px solid rgba(255, 165, 2, 0.3);
+#warnings-list .warning.error .warning-icon,
+#warnings-list .warning.error .warning-msg { 
+  color: var(--error) !important; 
 }
 
-.warning-icon {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 11px;
-  flex-shrink: 0;
+/* YELLOW WARNING SUBITEMS */
+/* Only apply if the element has 'warning' but NOT 'error' */
+#warnings-list .warning.warning:not(.error) { 
+  background: rgba(255, 165, 2, 0.08) !important; 
+  border-color: rgba(255, 165, 2, 0.2) !important;
+  color: var(--warning) !important;
 }
 
-.warning-error .warning-icon { color: var(--error); }
-.warning-warn  .warning-icon { color: var(--warning); }
-
-.warning-text {
-  color: var(--text);
-  line-height: 1.5;
+#warnings-list .warning.warning:not(.error) .warning-icon,
+#warnings-list .warning.warning:not(.error) .warning-msg { 
+  color: var(--warning) !important; 
 }
 
-:root {
-  --warning: #ffa502;
-}
+/* ── Graph & Misc UI ── */
 #cy {
   width: 100%;
-  height: 900px;
+  height: 600px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   overflow: hidden;
+  position: relative;
 }
+
+.section { margin-bottom: 40px; }
+
+.section-header h3 {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  font-size: 10px;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+}
+
+td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+tr:hover td { background: rgba(255, 255, 255, .02); }
+
+.badge {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 2px;
+}
+.badge.once  { background: rgba(0,229,255,.1);  color: var(--accent); }
+.badge.front { background: rgba(255,107,53,.1); color: var(--accent2); }
+.badge.start { background: rgba(46,213,115,.1); color: var(--ok); }

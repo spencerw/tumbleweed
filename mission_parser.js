@@ -719,12 +719,9 @@ function runChecks(mission, triggers, edges) {
       const hasInvisible    = taskIds.has('SetInvisible');
       const hasUnlimitedFuel = taskIds.has('SetUnlimitedFuel');
 
-      if (!hasImmortal)
+      if (!hasImmortal && !hasInvisible)
         issues.push({ severity: 'WARNING',
-          message: `${task === 'AWACS' ? 'AWACS' : 'Tanker'} group "${name}" is not set to immortal.` });
-      if (!hasInvisible)
-        issues.push({ severity: 'WARNING',
-          message: `${task === 'AWACS' ? 'AWACS' : 'Tanker'} group "${name}" is not set to invisible.` });
+          message: `${task === 'AWACS' ? 'AWACS' : 'Tanker'} group "${name}" is not set to immortal or invisible.` });
       if (!hasUnlimitedFuel)
         issues.push({ severity: 'WARNING',
           message: `${task === 'AWACS' ? 'AWACS' : 'Tanker'} group "${name}" does not have unlimited fuel.` });

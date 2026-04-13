@@ -27,13 +27,22 @@
     
     <div id="mission-bar"></div>
 
-    <div id="warnings-list"></div>
+    <div id="main-panel">
 
-    <div class="section" id="graph-section" style="display:none;">
-      <div class="section-header">
-        <h3>Trigger Logic Flow</h3>
+      <div id="warnings-panel">
+        <div class="section-header" style="margin-bottom:12px;">
+          <h3>QC Checks</h3>
+        </div>
+        <div id="warnings-list"></div>
       </div>
-      <div id="cy"></div>
+
+      <div id="graph-panel" class="section" style="display:none;">
+        <div class="section-header">
+          <h3>Trigger Logic Flow</h3>
+        </div>
+        <div id="cy"></div>
+      </div>
+
     </div>
 
     <div class="section">
@@ -41,8 +50,7 @@
         <h3>Mission Triggers</h3>
         <span class="count" id="trigger-count">0 found</span>
       </div>
-      <div id="trigger-list">
-        </div>
+      <div id="trigger-list"></div>
     </div>
 
   </div>

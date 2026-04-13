@@ -30,71 +30,67 @@ function renderMissionBar(filename, theatre, date) {
 
 // ── Warnings ──────────────────────────────────────────────────────────────────
 
-// ── Warnings ──────────────────────────────────────────────────────────────────
+function renderWarnings(categories) {
+  if (!categories || !Array.isArray(categories)) return '';
 
-function renderWarnings(allIssues, categories) {
-  let html = `<div class="warnings-section">`;
+  // Sort order: Pass → Error → Warning → Skip
+  const getPriority = (cat) => {
+    if (cat.skipped) return 3;
+    if (cat.issues && cat.issues.some(i => i.severity === 'ERROR')) return 1;
+    if (cat.issues && cat.issues.some(i => i.severity === 'WARNING')) return 2;
+    return 0; 
+  };
 
-  if (!categories || categories.length === 0) {
-    html += `<div style="color:#2ed573; font-weight:600; padding:8px 0;">✓ QC check passed — no problems found.</div>`;
-    html += `</div>`;
-    return html;
-  }
+  const sorted = [...categories].sort((a, b) => getPriority(a) - getPriority(b));
 
-  for (let i = 0; i < categories.length; i++) {
-    const cat = categories[i];
-    const issues = cat.issues || [];
-    const errors = issues.filter(w => w.severity === 'ERROR');
-    const warnings = issues.filter(w => w.severity === 'WARNING');
-    const label = cat.label || 'Check';
-
-    const hasErrors = errors.length > 0;
-    const hasWarnings = warnings.length > 0;
-
-    if (!hasErrors && !hasWarnings) {
-      // PASSED - plain text, NO box, NO background
-      html += `
-        <div style="color:#2ed573; font-weight:600; padding:6px 0;">
-          ✓ ${esc(label)} — passed
-        </div>`;
-    } 
-    else if (hasErrors) {
-      const countText = `${errors.length} error${errors.length !== 1 ? 's' : ''}` +
-                        (hasWarnings ? `, ${warnings.length} warning${warnings.length !== 1 ? 's' : ''}` : '');
-      html += `
-        <div style="color:#ff4757; font-weight:600; padding:8px 0;">
-          ✗ ${esc(label)}: ${countText}.
-        </div>`;
-    } 
-    else {
-      html += `
-        <div style="color:#ffa502; font-weight:600; padding:8px 0;">
-          ⚠ ${esc(label)}: ${warnings.length} warning${warnings.length !== 1 ? 's' : ''}.
+  return sorted.map(cat => {
+    // 1. Handle Skipped
+    if (cat.skipped) {
+      return `
+        <div class="warning-category">
+          <div class="warnings-header cat-skip">
+            <span class="warning-icon">○</span> ${esc(cat.label)} (No Data)
+          </div>
         </div>`;
     }
 
-    // Individual messages
-    if (hasErrors) {
-      html += errors.map(w => `
-        <div class="warning warning-error">
-          <span class="warning-icon">✗</span>
-          <span class="warning-text">${esc(w.message)}</span>
+    // 2. Handle Pass
+    if (!cat.issues || cat.issues.length === 0) {
+      return `
+        <div class="warning-category">
+          <div class="warnings-header warnings-pass">
+            <span class="warning-icon">✔</span> ${esc(cat.label)}
+          </div>
+        </div>`;
+    }
+
+    // 3. Handle Errors/Warnings
+    const hasError = cat.issues.some(i => i.severity === 'ERROR');
+    const headerClass = hasError ? 'cat-error' : 'cat-warn';
+    const headerIcon = hasError ? '✘' : '⚠';
+
+    const issueHtml = cat.issues.map(i => {
+    // Ensure this is lowercase 'error' or 'warning'
+    const sev = (i.severity || 'WARNING').toLowerCase(); 
+    const icon = sev === 'error' ? '✘' : '⚠';
+    
+    return `
+      <div class="warning ${sev}">
+        <span class="warning-icon">${icon}</span>
+        <span class="warning-msg">${esc(i.message)}</span>
+      </div>`;
+  }).join('');
+
+    return `
+      <div class="warning-category">
+        <div class="warnings-header ${headerClass}">
+          <span class="warning-icon">${headerIcon}</span> ${esc(cat.label)}
         </div>
-      `).join('');
-    }
-
-    if (hasWarnings) {
-      html += warnings.map(w => `
-        <div class="warning warning-warn">
-          <span class="warning-icon">⚠</span>
-          <span class="warning-text">${esc(w.message)}</span>
+        <div class="warning-list">
+          ${issueHtml}
         </div>
-      `).join('');
-    }
-  }
-
-  html += `</div>`;
-  return html;
+      </div>`;
+  }).join('');
 }
 
 // ── Trigger table ─────────────────────────────────────────────────────────────
@@ -156,7 +152,7 @@ function renderTriggers(tree) {
 function renderGraph(triggers, edges) {
   const allIds = new Set(triggers.map(t => t.idx));
 
-  const section = document.getElementById('graph-section');
+  const section = document.getElementById('graph-panel');
   if (allIds.size === 0) { section.style.display = 'none'; return; }
   section.style.display = 'block';
 
@@ -325,7 +321,7 @@ function renderGraph(triggers, edges) {
   const container = document.getElementById('cy');
   container.innerHTML = '';
 
-  const CANVAS_H = 900;
+  const CANVAS_H = 700;
 
   const svg = d3.select(container).append('svg')
     .attr('width', '100%')
@@ -495,7 +491,7 @@ async function loadMiz(file) {
     document.getElementById('trigger-count').textContent = `${triggers ? triggers.length : 0} found`;
 
     // 5. Render Warnings — show every check (passed or failed)
-    document.getElementById('warnings-list').innerHTML = renderWarnings(warnings, categories);
+    document.getElementById('warnings-list').innerHTML = renderWarnings(categories);
 
     // 6. Conditional Trigger Rendering
     if (triggers && triggers.length > 0) {
@@ -504,7 +500,7 @@ async function loadMiz(file) {
         renderGraph(triggers, edges);
     } else {
         document.getElementById('trigger-list').innerHTML = '<div class="none">No triggers defined in this mission.</div>';
-        document.getElementById('graph-section').style.display = 'none';
+        document.getElementById('graph-panel').style.display = 'none';
     }
 
     // Show app
